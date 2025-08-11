@@ -100,39 +100,45 @@ const ChatBox = () => {
         <div className="space-y-4 max-w-4xl mx-auto">
           {messages
             .toSorted((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
-            .map((message, index) => (
-              <div
-                key={index}
-                className={`flex flex-col ${
-                  message.to_user_id !== user._id ? 'items-start' : 'items-end'
-                }`}
-              >
+            .map((message, index) => {
+              const isOwnMessage = message.to_user_id === user._id
+              return (
                 <div
-                  className={`p-2 text-sm max-w-sm bg-white text-slate-700 rounded-lg shadow ${
-                    message.to_user_id !== user._id
-                      ? 'rounded-bl-none'
-                      : 'rounded-br-none'
+                  key={index}
+                  className={`flex flex-col ${
+                    isOwnMessage ? 'items-end' : 'items-start'
                   }`}
                 >
-                  {message.message_type === 'image' &&
-                    message.media_urls?.map((url, i) => (
-                      <img
-                        key={i}
-                        src={url}
-                        className="w-full max-w-sm rounded-lg mb-1"
-                        alt=""
-                      />
-                    ))}
+                  <div
+                    className={`p-2 text-sm max-w-sm rounded-lg shadow ${
+                      isOwnMessage
+                        ? 'bg-gradient-to-br from-indigo-500 to-purple-600 active:scale-95 text-white'
+                        : 'bg-white text-slate-700'
+                    }`}
+                    style={{
+                      borderRadius: '12px', 
+                    }}
+                  >
+                    {message.message_type === 'image' &&
+                      message.media_urls?.map((url, i) => (
+                        <img
+                          key={i}
+                          src={url}
+                          className="w-full max-w-sm rounded-lg mb-1"
+                          alt=""
+                        />
+                      ))}
 
-                  {message.message_type === 'audio' &&
-                    message.media_urls?.map((url, i) => (
-                      <audio key={i} controls src={url} className="mb-1" />
-                    ))}
+                    {message.message_type === 'audio' &&
+                      message.media_urls?.map((url, i) => (
+                        <audio key={i} controls src={url} className="mb-1" />
+                      ))}
 
-                  {message.text && <p>{message.text}</p>}
+                    {message.text && <p>{message.text}</p>}
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           <div ref={messagesEndRef} />
         </div>
       </div>
