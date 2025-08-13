@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react'
 import { dummyMessagesData, dummyUserData } from '../assets/assets'
-import { Image as ImageIcon, SendHorizonal, Mic } from 'lucide-react'
+import { Image as ImageIcon, SendHorizonal, Mic, Phone, Video } from 'lucide-react' // ⬅ Added Phone & Video icons
 
 const ChatBox = () => {
   const [text, setText] = useState('')
@@ -87,13 +87,28 @@ const ChatBox = () => {
   return (
     <div className="flex flex-col h-screen">
       {/* Header */}
-      <div className="flex items-center gap-2 p-2 md:px-10 xl:pl-42 bg-gradient-to-r from-indigo-50 to-purple-50 border-b border-gray-300">
-        <img src={user.profile_picture} alt="" className="size-8 rounded-full" />
-        <div>
-          <p className="font-medium">{user.full_name}</p>
-          <p className="text-sm text-gray-500 -mt-1.5">@{user.username}</p>
+      <div className="flex items-center justify-between p-2 md:px-4 bg-gradient-to-r from-indigo-50 to-purple-50 border-b border-gray-300">
+        {/* Left: User Info */}
+        <div className="flex items-center gap-2">
+          <img src={user.profile_picture} alt="" className="size-8 sm:size-10 rounded-full" />
+          <div className="min-w-0">
+            <p className="font-medium text-sm sm:text-base truncate">{user.full_name}</p>
+            <p className="text-xs sm:text-sm text-gray-500">@{user.username}</p>
+          </div>
+        </div>
+
+        {/* Right: Icons + Menu */}
+        <div className="flex items-center gap-6 sm:gap-4 md:gap-5">
+          <button className="p-1 sm:p-2 hover:bg-gray-200 rounded-full transition" title="Voice Call">
+            <Phone className="w-6 h-6 sm:w-5 sm:h-5 text-gray-700" />
+          </button>
+          <button className="mr-12 sm:mr-10 md:mr-6 p-2 sm:p-6 hover:bg-gray-200 rounded-full transition" title="Video Call">
+            <Video className="w-7 h-7 sm:w-6 sm:h-6 md:w-6 md:h-6 text-gray-700" />
+          </button>
         </div>
       </div>
+
+
 
       {/* Messages */}
       <div className="flex-1 p-5 md:p-10 overflow-y-scroll">
@@ -105,9 +120,7 @@ const ChatBox = () => {
               return (
                 <div
                   key={index}
-                  className={`flex flex-col ${
-                    isOwnMessage ? 'items-end' : 'items-start'
-                  }`}
+                  className={`flex flex-col ${isOwnMessage ? 'items-end' : 'items-start'}`}
                 >
                   <div
                     className={`p-2 text-sm max-w-sm rounded-lg shadow ${

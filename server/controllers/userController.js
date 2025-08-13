@@ -271,14 +271,16 @@
 //     }
 // }
 
+import Connection from "../models/Connection.js";
 import imagekit from "../configs/imageKit.js";
 import User from "../models/User.js";
-import Connection from "../models/Connection.js"; // FIXED import
+import Post from "../models/Post.js";
+import { inngest } from "../inngest/index.js";
 
 // Get User data using userId
 export const getUserData = async (req, res) => {
     try {
-        const { userId } = req.auth; // FIXED
+        const { userId } = req.auth;
         const user = await User.findById(userId);
 
         if (!user) {
@@ -292,7 +294,7 @@ export const getUserData = async (req, res) => {
     }
 };
 
-// Update user data
+// Update user data using userId
 export const updateUserData = async (req, res) => {
     try {
         const { userId } = req.auth;
@@ -312,27 +314,46 @@ export const updateUserData = async (req, res) => {
             }
         }
 
-        const updatedData = { username, bio, location, full_name };
+        const updatedData = {
+            username,
+            bio,
+            location,
+            full_name,
+        };
 
         const profile = req.files?.profile?.[0];
         const cover = req.files?.cover?.[0];
 
         if (profile) {
-            const profileResponse = await imagekit.upload({
-                file: profile.buffer.toString("base64"), // FIXED buffer to Base64
+            const response = await imagekit.upload({
+                file: profile.buffer,
                 fileName: profile.originalname,
             });
 
-            updatedData.profile_picture = profileResponse.url;
+            updatedData.profile_picture = imagekit.url({
+                path: response.filePath,
+                transformation: [
+                    { quality: "auto" },
+                    { format: "webp" },
+                    { width: "512" },
+                ],
+            });
         }
 
         if (cover) {
-            const coverResponse = await imagekit.upload({
-                file: cover.buffer.toString("base64"),
+            const response = await imagekit.upload({
+                file: cover.buffer,
                 fileName: cover.originalname,
             });
 
-            updatedData.cover_photo = coverResponse.url;
+            updatedData.cover_photo = imagekit.url({
+                path: response.filePath,
+                transformation: [
+                    { quality: "auto" },
+                    { format: "webp" },
+                    { width: "1280" },
+                ],
+            });
         }
 
         const user = await User.findByIdAndUpdate(userId, updatedData, { new: true });
@@ -344,7 +365,7 @@ export const updateUserData = async (req, res) => {
     }
 };
 
-// Discover users
+// Find Users using username, email, location and name
 export const discoverUsers = async (req, res) => {
     try {
         const { userId } = req.auth;
@@ -360,7 +381,7 @@ export const discoverUsers = async (req, res) => {
                 { email: new RegExp(input, "i") },
                 { full_name: new RegExp(input, "i") },
                 { location: new RegExp(input, "i") },
-            ]
+            ],
         });
 
         const filteredUsers = allUsers.filter(user => user._id.toString() !== userId);
@@ -372,7 +393,7 @@ export const discoverUsers = async (req, res) => {
     }
 };
 
-// Follow user
+// Follow Users
 export const followUser = async (req, res) => {
     try {
         const { userId } = req.auth;
@@ -402,7 +423,7 @@ export const followUser = async (req, res) => {
     }
 };
 
-// Unfollow user
+// Unfollow users
 export const unfollowUser = async (req, res) => {
     try {
         const { userId } = req.auth;
@@ -428,7 +449,7 @@ export const unfollowUser = async (req, res) => {
     }
 };
 
-// Send connection request
+// Send Connection Request
 export const sendConnectionRequest = async (req, res) => {
     try {
         const { userId } = req.auth;
@@ -437,7 +458,7 @@ export const sendConnectionRequest = async (req, res) => {
         const last24Hours = new Date(Date.now() - 24 * 60 * 60 * 1000);
         const connectionRequests = await Connection.find({
             from_user_id: userId,
-            created_at: { $gt: last24Hours }
+            created_at: { $gt: last24Hours },
         });
 
         if (connectionRequests.length >= 20) {
@@ -447,14 +468,24 @@ export const sendConnectionRequest = async (req, res) => {
         const connection = await Connection.findOne({
             $or: [
                 { from_user_id: userId, to_user_id: id },
-                { from_user_id: id, to_user_id: userId }
-            ]
+                { from_user_id: id, to_user_id: userId },
+            ],
         });
 
         if (!connection) {
-            await Connection.create({ from_user_id: userId, to_user_id: id });
+            const newConnection = await Connection.create({
+                from_user_id: userId,
+                to_user_id: id,
+            });
+
+            // Trigger the event to instantly send an email for a connection request
+            await inngest.send({
+                name: 'app/connection-request',
+                data: {connectionId: newConnection._id}
+            })
+
             return res.json({ success: true, message: "Connection request sent successfully" });
-        } else if (connection.status === "accepted") {
+        } else if (connection && connection.status === "accepted") {
             return res.json({ success: false, message: "You are already connected with this user" });
         } else {
             return res.json({ success: false, message: "Connection request pending" });
@@ -470,8 +501,7 @@ export const sendConnectionRequest = async (req, res) => {
 export const getUserConnections = async (req, res) => {
     try {
         const { userId } = req.auth;
-        const user = await User.findById(userId)
-            .populate("connections followers following");
+        const user = await User.findById(userId).populate("connections followers following");
 
         const connections = user.connections;
         const followers = user.followers;
@@ -479,9 +509,8 @@ export const getUserConnections = async (req, res) => {
 
         const pendingConnections = (await Connection.find({
             to_user_id: userId,
-            status: "pending"
-        }).populate("from_user_id"))
-            .map(connection => connection.from_user_id);
+            status: "pending",
+        }).populate("from_user_id")).map(connection => connection.from_user_id);
 
         res.json({ success: true, connections, followers, following, pendingConnections });
 
@@ -491,13 +520,16 @@ export const getUserConnections = async (req, res) => {
     }
 };
 
-// Accept connection request
+// Accept the connection request
 export const acceptConnectionRequest = async (req, res) => {
     try {
         const { userId } = req.auth;
         const { id } = req.body;
 
-        const connection = await Connection.findOne({ from_user_id: id, to_user_id: userId });
+        const connection = await Connection.findOne({
+            from_user_id: id,
+            to_user_id: userId,
+        });
 
         if (!connection) {
             return res.json({ success: false, message: "Connection not found" });
@@ -522,3 +554,21 @@ export const acceptConnectionRequest = async (req, res) => {
     }
 };
 
+// Get User Profiles
+export const getUserProfiles = async (req, res) => {
+    try {
+        const { profileId } = req.body;
+        const profile = await User.findById(profileId);
+
+        if(!profile) {
+            return res.json({ success: false, message: "Profile Not Found" });
+        }
+
+        const posts = await Post.find({user: profileId}).populate('user');
+        res.json({success: true, profile, posts})
+
+    } catch (error) {
+        console.error(error);
+        res.json({ success: false, message: error.message });
+    }
+}
