@@ -1,28 +1,55 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { dummyPostsData, dummyUserData } from '../assets/assets';
 import Loading from '../components/Loading';
 import UserProfileinfo from '../components/UserProfileinfo';
 import PostCard from '../components/PostCard';
 import moment from 'moment';
 import ProfileModal from '../components/ProfileModal';
+import { useSelector } from 'react-redux';
+import { useAuth } from '@clerk/clerk-react';
+import api from '../api/axios';
+import toast from 'react-hot-toast';
 
 const Profile = () => {
+  const currentUser = useSelector((state) => state.user.value);
+  const { getToken } = useAuth();
   const { profileId } = useParams();
+
   const [user, setUser] = useState(null);
   const [posts, setPosts] = useState([]);
   const [activeTab, setActiveTab] = useState('posts');
   const [showEdit, setShowEdit] = useState(false);
 
-  const fetchUser = async () => {
-    // Simulating API call
-    setUser(dummyUserData);
-    setPosts(dummyPostsData);
+  const fetchUser = async (id) => {
+    try {
+      const token = await getToken(); 
+
+      const { data } = await api.post(
+        `/api/user/profiles`,
+        { profileId: id },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      if (data.success) {
+        setUser(data.profile);
+        setPosts(data.posts);
+      } else {
+        toast.error(data.message || 'Failed to load profile');
+      }
+    } catch (error) {
+      toast.error(error.message || 'Something went wrong');
+    }
   };
 
   useEffect(() => {
-    fetchUser();
-  }, []);
+    if (profileId) {
+      fetchUser(profileId);
+    } else if (currentUser?._id) {
+      fetchUser(currentUser._id);
+    }
+  }, [profileId, currentUser]);
 
   return user ? (
     <div className="relative h-full overflow-y-scroll bg-gray-50 p-6">
@@ -49,19 +76,19 @@ const Profile = () => {
           />
         </div>
 
-        {/* Tab */}
+        {/* Tabs */}
         <div className="mt-6">
           <div className="bg-white rounded-xl shadow p-1 flex justify-center max-w-md mx-auto">
-            {["posts", "media", "likes"].map((tab) => (
+            {['posts', 'media', 'likes'].map((tab) => (
               <button
                 type="button"
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-colors cursor-pointer
+                className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-colors cursor-pointer ml-1 mr-1
                   ${
                     activeTab === tab
-                      ? "bg-indigo-600 text-white"
-                      : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                      ? 'bg-indigo-600 text-white'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                   }`}
               >
                 {tab.charAt(0).toUpperCase() + tab.slice(1)}
@@ -70,32 +97,49 @@ const Profile = () => {
           </div>
 
           {/* Posts */}
-            {activeTab === 'posts' && (
-              <div className='mt-6 flex flex-col items-center gap-6'>
-                {posts.map((post) => <PostCard key={post._id} post={post}/>)}
-              </div>
-            )}
+          {activeTab === 'posts' && (
+            <div className="mt-6 flex flex-col items-center gap-6">
+              {posts.map((post) => (
+                <PostCard key={post._id} post={post} />
+              ))}
+            </div>
+          )}
 
           {/* Media */}
           {activeTab === 'media' && (
-              <div className='flex flex-wrap mt-6 max-w-6xl'>
-                {posts.filter((post) => post.image_urls.length > 0).map((post) => (
-                  <>
+            <div className="flex flex-wrap mt-6 max-w-6xl">
+              {posts
+                .filter((post) => post.image_urls.length > 0)
+                .map((post) => (
+                  <React.Fragment key={post._id}>
                     {post.image_urls.map((image, index) => (
-                      <Link target="_blank" to={image} key={index} className='relative group'>
-                        <img src={image} key={index} className='w-63 aspect-video object-cover ml-1' alt=""/>
-                        <p className='absolute bottom-0 right-0 text-xs p-1 px-3 backdrop-blur-xl
-                        text-white opacity-0 group-hover:opacity-100 transition duration-300'>Posted {moment(post.createdAt).fromNow()}</p>
+                      <Link
+                        target="_blank"
+                        to={image}
+                        key={index}
+                        className="relative group"
+                      >
+                        <img
+                          src={image}
+                          className="w-63 aspect-video object-cover ml-1"
+                          alt=""
+                        />
+                        <p
+                          className="absolute bottom-0 right-0 text-xs p-1 px-3 backdrop-blur-xl
+                        text-white opacity-0 group-hover:opacity-100 transition duration-300"
+                        >
+                          Posted {moment(post.createdAt).fromNow()}
+                        </p>
                       </Link>
                     ))}
-                  </>
+                  </React.Fragment>
                 ))}
-              </div>
+            </div>
           )}
         </div>
       </div>
 
-      {/* Edit Profile Edit */}
+      {/* Edit Profile Modal */}
       {showEdit && <ProfileModal setShowEdit={setShowEdit} />}
     </div>
   ) : (

@@ -137,22 +137,25 @@ const deleteStory = inngest.createFunction(
     }
 )
 
-// 
 const sendNotificationOfUnseenMessages = inngest.createFunction(
     { id: "send-unseen-messages-notification" },
     { cron: "TZ=Asia/Kolkata 0 9 * * *" }, // Every day at 9 a.m. Mumbai time
-    async ({ event, step }) => {
-        const messages = await Message.find({seen: false}).populate('to_user_id');
+    async ({ step }) => {
+        const messages = await Message.find({ seen: false }).populate('to_user_id');
         const unseenCount = {};
 
-         messages.map(message => {
-            unseenCount[message.to_user_id] = (unseenCount[message.to_user_id._id] || 0) + 1;
-        })
+        // Count unseen messages per user
+        messages.forEach(message => {
+            const userId = message.to_user_id._id.toString();
+            unseenCount[userId] = (unseenCount[userId] || 0) + 1;
+        });
 
+        // Send emails
         for (const userId in unseenCount) {
             const user = await User.findById(userId);
-            const subject = `You have ${unseenCount[userId]} unseen messages`;
+            if (!user) continue;
 
+            const subject = `You have ${unseenCount[userId]} unseen messages`;
             const body = `
                 <div style="font-family: Arial, sans-serif; padding: 20px;">
                     <h2>Hi ${user.full_name},</h2>
@@ -161,17 +164,19 @@ const sendNotificationOfUnseenMessages = inngest.createFunction(
                     <br/>
                     <p>Thanks,<br/>PingUp – Stay Connected</p>
                 </div>
-                `;
+            `;
 
-                await sendEmail({
-                    to: user.email,
-                    subject,
-                    body
-                })
+            await sendEmail({
+                to: user.email,
+                subject,
+                body
+            });
         }
-        return {message: "Notification Sent."}
+
+        return { message: "Notification Sent." };
     }
-)
+);
+
 
 // Export all functions
 export const functions = [

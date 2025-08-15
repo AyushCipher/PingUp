@@ -2,24 +2,52 @@ import React, { useState } from 'react';
 import { BadgeCheck, Heart, MessageCircle, Share2 } from 'lucide-react';
 import moment from 'moment';
 import { dummyUserData } from '../assets/assets';
+import { useSelector } from 'react-redux';
+import { useAuth } from '@clerk/clerk-react';
+import toast from 'react-hot-toast';
+import api from '../api/axios';
 
 const PostCard = ({ post }) => {
   const [likes, setLikes] = useState(post.likes_count || []);
-  const currentUser = dummyUserData;
+
+  const currentUser = useSelector((state) => state.user.value);
 
   const postWithHashtags = post.content?.replace(
     /(#\w+)/g,
     '<span class="text-indigo-600">$1</span>'
   );
 
-  const handleLike = () => {
-    // Dummy toggle like functionality
-    if (likes.includes(currentUser._id)) {
-      setLikes(likes.filter((id) => id !== currentUser._id));
+  const {getToken} = useAuth();
+
+  const handleLike = async () => {
+  try {
+    // Get authentication token
+    const token = await getToken();
+
+    // Send POST request to like/unlike the post
+    const { data } = await api.post('/api/post/like',
+      { postId: post._id }, 
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
+
+    if (data.success) {
+      toast.success(data.message);
+
+      setLikes((prevLikes) =>
+        prevLikes.includes(currentUser._id)
+          ? prevLikes.filter((id) => id !== currentUser._id) // unlike
+          : [...prevLikes, currentUser._id] // like
+      );
     } else {
-      setLikes([...likes, currentUser._id]);
+      toast.error(data.message || 'Failed to like the post');
     }
-  };
+  } catch (error) {
+    toast.error( error.message || 'Something went wrong');
+  }
+};
+
 
   return (
     <div className="bg-white rounded-xl shadow p-4 space-y-4 w-full max-w-2xl">
